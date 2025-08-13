@@ -10,7 +10,7 @@ export default function App({ Component, pageProps }: AppProps) {
       <div style={{fontFamily:"Inter, system-ui, sans-serif", padding:24}}>
         <Component {...pageProps} />
         <footer style={{marginTop:32, fontSize:12, color:'#6b7280'}}>
-          ⚠️ Solo per scopi informativi. Non è un invito al gioco. 18+
+          âš ï¸ Solo per scopi informativi. Non Ã¨ un invito al gioco. 18+
         </footer>
       </div>
     </>

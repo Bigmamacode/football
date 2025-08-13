@@ -1,4 +1,4 @@
-﻿import React from "react";
+import React from "react";
 import MatchCard from "../components/MatchCard";
 import { fetchPredictions } from "../lib/api";
 
