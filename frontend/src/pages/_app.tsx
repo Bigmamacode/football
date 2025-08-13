@@ -8,7 +8,7 @@ export default function App({ Component, pageProps }: AppProps) {
       <div style={{fontFamily:"Inter, system-ui, sans-serif", padding:24}}>
         <Component {...pageProps} />
         <footer style={{marginTop:32, fontSize:12, color:"#6b7280"}}>
-          {"\u26A0\uFE0F"} Solo per scopi informativi. Non \u00E8 un invito al gioco. 18+
+          {"\u26A0\uFE0F"} Solo per scopi informativi. Non è un invito al gioco. 18+
         </footer>
       </div>
     </>
