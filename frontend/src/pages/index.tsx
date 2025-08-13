@@ -1,4 +1,4 @@
-import React from "react";
+﻿import React from "react";
 import MatchCard from "../components/MatchCard";
 import { fetchPredictions } from "../lib/api";
 
@@ -16,9 +16,9 @@ export default function Home() {
 
   return (
     <main style={{maxWidth:900, margin:"0 auto", display:"grid", gap:16}}>
-      <h1 style={{fontSize:28, fontWeight:800}}>Probabilità Under/Over 2.5</h1>
+      <h1 style={{fontSize:28, fontWeight:800}}>ProbabilitÃ  Under/Over 2.5</h1>
       <p style={{color:'#6b7280'}}>MVP con modello Poisson su dati mock. Collega le API reali in <code>backend/data/loader.py</code>.</p>
-      {loading && <div>Caricamento…</div>}
+      {loading && <div>Caricamentoâ€¦</div>}
       {error && <div style={{color:"crimson"}}>Errore: {error}</div>}
       <div style={{display:"grid", gap:12}}>
         {data.map((m, i) => (
@@ -28,3 +28,4 @@ export default function Home() {
     </main>
   );
 }
+
