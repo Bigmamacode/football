@@ -1,6 +1,6 @@
 import React from "react";
-import MatchCard from "@/components/MatchCard";
-import { fetchPredictions } from "@/lib/api";
+import MatchCard from "../components/MatchCard";
+import { fetchPredictions } from "../lib/api";
 
 export default function Home() {
   const [data, setData] = React.useState<any[]>([]);
