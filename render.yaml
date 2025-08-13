@@ -1,0 +1,29 @@
+services:
+  - type: web
+    name: underover-backend
+    env: python
+    plan: free
+    rootDir: backend
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "uvicorn main:app --host 0.0.0.0 --port $PORT"
+    envVars:
+      - key: PYTHONPATH
+        value: .
+    healthCheckPath: /health
+    autoDeploy: true
+    region: frankfurt
+
+  - type: web
+    name: underover-frontend
+    env: node
+    plan: free
+    rootDir: frontend
+    buildCommand: "npm ci && npm run build"
+    startCommand: "next start -p $PORT"
+    envVars:
+      - key: NEXT_PUBLIC_API_BASE
+        value: https://underover-backend.onrender.com
+      - key: NODE_VERSION
+        value: 20
+    autoDeploy: true
+    region: frankfurt
