@@ -1,4 +1,4 @@
-services:
+﻿services:
   - type: web
     name: underover-backend
     env: python
@@ -19,7 +19,7 @@ services:
     plan: free
     rootDir: frontend
     buildCommand: "npm ci && npm run build"
-    startCommand: "next start -p $PORT"
+    startCommand: "npm run start"
     envVars:
       - key: NEXT_PUBLIC_API_BASE
         value: https://underover-backend.onrender.com
@@ -27,3 +27,4 @@ services:
         value: 20
     autoDeploy: true
     region: frankfurt
+
