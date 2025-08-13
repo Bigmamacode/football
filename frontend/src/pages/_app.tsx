@@ -1,18 +1,16 @@
-import type { AppProps } from 'next/app'
-import Head from 'next/head'
+import type { AppProps } from "next/app";
+import Head from "next/head";
 
 export default function App({ Component, pageProps }: AppProps) {
   return (
     <>
-      <Head>
-        <meta charSet="utf-8" />
-      </Head>
+      <Head><meta charSet="utf-8" /></Head>
       <div style={{fontFamily:"Inter, system-ui, sans-serif", padding:24}}>
         <Component {...pageProps} />
-        <footer style={{marginTop:32, fontSize:12, color:'#6b7280'}}>
-          âš ï¸ Solo per scopi informativi. Non Ã¨ un invito al gioco. 18+
+        <footer style={{marginTop:32, fontSize:12, color:"#6b7280"}}>
+          {"\u26A0\uFE0F"} Solo per scopi informativi. Non \u00E8 un invito al gioco. 18+
         </footer>
       </div>
     </>
-  )
+  );
 }
