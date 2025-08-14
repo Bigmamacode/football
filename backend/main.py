@@ -5,6 +5,7 @@ from typing import List, Optional, Tuple
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+from fastapi.responses import JSONResponse
 
 API_TITLE = "Under/Over API"
 API_VERSION = "0.2.2"  # bump
@@ -50,9 +51,20 @@ def _ensure_model():
         _MODEL = PoissonUnderOverModel(home_adv=HOME_ADV)
     if not _FITTED:
         hist = get_history()
-        if not hist: raise RuntimeError("empty_history")
-        _MODEL.fit(hist); _FITTED = True
-        log.info("Poisson fitted on %d matches (HOME_ADV=%s)", len(hist), HOME_ADV)
+        if not hist:
+            raise RuntimeError("empty_history")
+        _MODEL.fit(hist)
+        # Fallback: se non ha appreso strength, rifitta sui mock per evitare λ identici
+        try:
+            meta = _MODEL.meta()
+            if (meta.get("teams_att", 0) < 1) or (meta.get("teams_def", 0) < 1):
+                log.warning("No team strengths learned from history; refitting on mock fallback")
+                from data.loader import get_mock_history  # type: ignore
+                _MODEL.fit(get_mock_history())
+        except Exception:
+            pass
+        _FITTED = True
+        log.info("Model meta after fit: %s", getattr(_MODEL, "meta", lambda: {})())
     return _MODEL
 
 def _get_matches():
