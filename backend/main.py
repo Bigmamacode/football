@@ -1,15 +1,13 @@
 from __future__ import annotations
 
-import os
-import logging
+import os, logging
 from typing import List, Optional, Tuple
-
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 API_TITLE = "Under/Over API"
-API_VERSION = "0.2.1"  # bump per tracciare il deploy
+API_VERSION = "0.2.2"  # bump
 LINE = float(os.getenv("UNDER_OVER_LINE", "2.5"))
 HOME_ADV = float(os.getenv("POISSON_HOME_ADV", "0.15"))
 FRONTEND_ORIGIN = os.getenv("FRONTEND_ORIGIN", "*").strip()
@@ -17,15 +15,7 @@ FRONTEND_ORIGIN = os.getenv("FRONTEND_ORIGIN", "*").strip()
 app = FastAPI(title=API_TITLE, version=API_VERSION)
 allow_origins = ["*"] if FRONTEND_ORIGIN in ("", "*") else [FRONTEND_ORIGIN]
 allow_credentials = False if allow_origins == ["*"] else True
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=allow_origins,
-    allow_credentials=allow_credentials,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
+app.add_middleware(CORSMiddleware, allow_origins=allow_origins, allow_credentials=allow_credentials, allow_methods=["*"], allow_headers=["*"])
 log = logging.getLogger("uvicorn.error")
 
 class Match(BaseModel):
@@ -60,10 +50,8 @@ def _ensure_model():
         _MODEL = PoissonUnderOverModel(home_adv=HOME_ADV)
     if not _FITTED:
         hist = get_history()
-        if not hist:
-            raise RuntimeError("empty_history")
-        _MODEL.fit(hist)
-        _FITTED = True
+        if not hist: raise RuntimeError("empty_history")
+        _MODEL.fit(hist); _FITTED = True
         log.info("Poisson fitted on %d matches (HOME_ADV=%s)", len(hist), HOME_ADV)
     return _MODEL
 
@@ -86,60 +74,44 @@ def health():
 
 @app.get("/debug/mock")
 def debug_mock():
-    """Ritorna i match mock per verificare il loader senza API."""
-    try:
-        rows = _get_mock_matches()
-        return {"count": len(rows), "sample": rows[:3]}
-    except Exception as e:
-        log.exception("debug_mock failed")
-        raise HTTPException(status_code=500, detail="debug_mock_failed")
+    rows = _get_mock_matches()
+    return {"count": len(rows), "sample": rows[:3]}
 
 @app.get("/predictions", response_model=List[Prediction])
-def predictions(force_mock: bool = Query(default=False, description="Forza mock matches")) -> List[Prediction]:
-    # 1) Model
+def predictions(force_mock: Optional[str] = Query(default=None)) -> List[Prediction]:
+    # parse booleana robusta: 1/true/yes/on
+    fm = str(force_mock or "").strip().lower() in ("1","true","yes","on")
+
     try:
         model = _ensure_model()
     except Exception:
         log.exception("Model initialization/fit failed")
         raise HTTPException(status_code=500, detail="model_init_failed")
 
-    # 2) Matches (con fallback e forzatura)
     try:
-        matches = _get_mock_matches() if force_mock else _get_matches()
+        matches = _get_mock_matches() if fm else _get_matches()
         if not matches:
-            log.warning("matches empty, using mock fallback")
+            log.warning("matches empty (fm=%s), using mock fallback", fm)
             matches = _get_mock_matches()
     except Exception:
         log.exception("matches loader failed")
         raise HTTPException(status_code=500, detail="matches_loader_failed")
 
-    log.info("predict: matches_count=%d force_mock=%s", len(matches), force_mock)
+    log.info("predict: matches_count=%d force_mock=%s", len(matches), fm)
 
-    # 3) Inference difensiva
     out: List[Prediction] = []
     for m in matches:
         try:
             home = (m.get("home") or m.get("homeTeam") or "").strip()
             away = (m.get("away") or m.get("awayTeam") or "").strip()
             if not home or not away:
-                log.warning("Skipping match without teams: %s", m)
-                continue
+                log.warning("Skipping match without teams: %s", m); continue
             lam_h, lam_a, p_u, p_o = _predict_pair(model, home, away, LINE)
             out.append(Prediction(
-                league=m.get("league"),
-                home=home,
-                away=away,
-                kickoff=m.get("kickoff"),
-                lambda_home=round(float(lam_h), 3),
-                lambda_away=round(float(lam_a), 3),
-                p_under=round(float(p_u), 4),
-                p_over=round(float(p_o), 4),
+                league=m.get("league"), home=home, away=away, kickoff=m.get("kickoff"),
+                lambda_home=round(float(lam_h),3), lambda_away=round(float(lam_a),3),
+                p_under=round(float(p_u),4), p_over=round(float(p_o),4),
             ))
         except Exception:
-            log.exception("Skipping bad match row: %s", m)
-            continue
+            log.exception("Skipping bad match row: %s", m); continue
     return out
-
-@app.get("/")
-def root():
-    return {"name": API_TITLE, "version": API_VERSION, "docs": "/docs", "health": "/health", "predictions": "/predictions"}
