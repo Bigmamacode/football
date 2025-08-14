@@ -1,0 +1,19 @@
+﻿# Node
+node_modules/
+frontend/node_modules/
+.next/
+out/
+npm-debug.log*
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build
+dist/
+build/
