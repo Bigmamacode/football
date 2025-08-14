@@ -4,18 +4,16 @@ import os
 import logging
 from typing import List, Optional, Tuple
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-# --- Config ---
 API_TITLE = "Under/Over API"
-API_VERSION = "0.2.0"
+API_VERSION = "0.2.1"  # bump per tracciare il deploy
 LINE = float(os.getenv("UNDER_OVER_LINE", "2.5"))
 HOME_ADV = float(os.getenv("POISSON_HOME_ADV", "0.15"))
 FRONTEND_ORIGIN = os.getenv("FRONTEND_ORIGIN", "*").strip()
 
-# --- App & CORS ---
 app = FastAPI(title=API_TITLE, version=API_VERSION)
 allow_origins = ["*"] if FRONTEND_ORIGIN in ("", "*") else [FRONTEND_ORIGIN]
 allow_credentials = False if allow_origins == ["*"] else True
@@ -30,7 +28,6 @@ app.add_middleware(
 
 log = logging.getLogger("uvicorn.error")
 
-# --- Schemi ---
 class Match(BaseModel):
     league: Optional[str] = Field(default=None)
     home: str
@@ -48,71 +45,77 @@ class Prediction(BaseModel):
     p_under: float
     p_over: float
 
-# --- Stato/modello (lazy fit) ---
 _MODEL = None
 _FITTED = False
 
 def _ensure_model():
-    """
-    Crea e fitta il modello alla prima richiesta, usando lo storico dal loader.
-    Import on-demand per evitare crash all'import del modulo.
-    """
     global _MODEL, _FITTED
     try:
         from models.poisson import PoissonUnderOverModel  # type: ignore
         from data.loader import get_history               # type: ignore
     except Exception as e:
-        log.exception("Import dei moduli modello/loader fallito")
+        log.exception("Import failed")
         raise RuntimeError("import_failed") from e
-
     if _MODEL is None:
         _MODEL = PoissonUnderOverModel(home_adv=HOME_ADV)
     if not _FITTED:
-        history = get_history()
-        if not history:
+        hist = get_history()
+        if not hist:
             raise RuntimeError("empty_history")
-        _MODEL.fit(history)
+        _MODEL.fit(hist)
         _FITTED = True
-        log.info("Poisson fitted on %d matches (HOME_ADV=%s)", len(history), HOME_ADV)
+        log.info("Poisson fitted on %d matches (HOME_ADV=%s)", len(hist), HOME_ADV)
     return _MODEL
 
 def _get_matches():
-    """Carica le prossime partite dal loader con import on-demand."""
-    try:
-        from data.loader import get_matches  # type: ignore
-        matches = get_matches() or []
-        return matches
-    except Exception as e:
-        log.exception("get_matches() failed")
-        raise
+    from data.loader import get_matches  # type: ignore
+    return get_matches() or []
+
+def _get_mock_matches():
+    from data.loader import get_mock_matches  # type: ignore
+    return get_mock_matches()
 
 def _predict_pair(model, home: str, away: str, line: float) -> Tuple[float, float, float, float]:
-    """Ritorna (lambda_home, lambda_away, p_under, p_over) per una coppia home/away."""
     lam_h, lam_a = model.expected_goals(home, away)
     p_under, p_over = model.prob_under_over(lam_h, lam_a, line=line)
     return lam_h, lam_a, p_under, p_over
 
-# --- Routes ---
 @app.get("/health")
 def health():
     return {"ok": True, "version": API_VERSION}
 
+@app.get("/debug/mock")
+def debug_mock():
+    """Ritorna i match mock per verificare il loader senza API."""
+    try:
+        rows = _get_mock_matches()
+        return {"count": len(rows), "sample": rows[:3]}
+    except Exception as e:
+        log.exception("debug_mock failed")
+        raise HTTPException(status_code=500, detail="debug_mock_failed")
+
 @app.get("/predictions", response_model=List[Prediction])
-def predictions() -> List[Prediction]:
-    # 1) Model init/fit
+def predictions(force_mock: bool = Query(default=False, description="Forza mock matches")) -> List[Prediction]:
+    # 1) Model
     try:
         model = _ensure_model()
     except Exception:
         log.exception("Model initialization/fit failed")
         raise HTTPException(status_code=500, detail="model_init_failed")
 
-    # 2) Matches
+    # 2) Matches (con fallback e forzatura)
     try:
-        matches = _get_matches()
+        matches = _get_mock_matches() if force_mock else _get_matches()
+        if not matches:
+            log.warning("matches empty, using mock fallback")
+            matches = _get_mock_matches()
     except Exception:
+        log.exception("matches loader failed")
         raise HTTPException(status_code=500, detail="matches_loader_failed")
 
-    # 3) Inference difensiva riga-per-riga
+    log.info("predict: matches_count=%d force_mock=%s", len(matches), force_mock)
+
+    # 3) Inference difensiva
     out: List[Prediction] = []
     for m in matches:
         try:
@@ -137,32 +140,6 @@ def predictions() -> List[Prediction]:
             continue
     return out
 
-@app.post("/predict", response_model=Prediction)
-def predict(match: Match) -> Prediction:
-    try:
-        model = _ensure_model()
-    except Exception:
-        log.exception("Model initialization/fit failed")
-        raise HTTPException(status_code=500, detail="model_init_failed")
-
-    lam_h, lam_a, p_u, p_o = _predict_pair(model, match.home, match.away, LINE)
-    return Prediction(
-        league=match.league,
-        home=match.home,
-        away=match.away,
-        kickoff=match.kickoff,
-        lambda_home=round(float(lam_h), 3),
-        lambda_away=round(float(lam_a), 3),
-        p_under=round(float(p_u), 4),
-        p_over=round(float(p_o), 4),
-    )
-
 @app.get("/")
 def root():
-    return {
-        "name": API_TITLE,
-        "version": API_VERSION,
-        "docs": "/docs",
-        "health": "/health",
-        "predictions": "/predictions",
-    }
+    return {"name": API_TITLE, "version": API_VERSION, "docs": "/docs", "health": "/health", "predictions": "/predictions"}
