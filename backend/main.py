@@ -13,19 +13,19 @@ from pydantic import BaseModel, Field
 API_TITLE = "Under/Over API"
 API_VERSION = "0.2.0"
 
-# linea Under/Over usata per le probabilità
+# linea Under/Over usata per le probabilitÃ 
 LINE = float(os.getenv("UNDER_OVER_LINE", "2.5"))
-# vantaggio campo del modello Poisson (0.10–0.25 tipico)
+# vantaggio campo del modello Poisson (0.10â€“0.25 tipico)
 HOME_ADV = float(os.getenv("POISSON_HOME_ADV", "0.15"))
 
-# CORS: origin del frontend (metti esattamente l’URL del frontend se vuoi restringere)
+# CORS: origin del frontend (metti esattamente lâ€™URL del frontend se vuoi restringere)
 FRONTEND_ORIGIN = os.getenv("FRONTEND_ORIGIN", "*").strip()
 
 # -------- Import locali (loader + modello) --------
 # Il loader fornisce storico e prossime partite (API reale o mock con fallback)
 from data.loader import get_history, get_matches  # type: ignore
 
-# Modello Poisson dell’MVP (attacco/difesa per squadra + campo)
+# Modello Poisson dellâ€™MVP (attacco/difesa per squadra + campo)
 from models.poisson import PoissonUnderOverModel  # type: ignore
 
 # -------- App & CORS --------
@@ -72,10 +72,16 @@ def _ensure_model() -> PoissonUnderOverModel:
     if _MODEL is None:
         _MODEL = PoissonUnderOverModel(home_adv=HOME_ADV)
     if not _FITTED:
-        history = get_history()  # può usare API reali se è impostata la chiave; altrimenti mock
+        history = get_history()  # puÃ² usare API reali se Ã¨ impostata la chiave; altrimenti mock
         _MODEL.fit(history)
         _FITTED = True
         log.info("Poisson model fitted on %d matches (HOME_ADV=%s)", len(history), HOME_ADV)
     return _MODEL
-
-def _predict_pair(model: PoissonUnderOverModel, home: str, away: str, line: float) -> Tuple[float, float]()
+    
+def _predict_pair(
+    model: PoissonUnderOverModel, home: str, away: str, line: float
+) -> Tuple[float, float, float, float]:
+    \"\"\"Ritorna (lambda_home, lambda_away, p_under, p_over) per una coppia home/away.\"\"\"
+    lam_h, lam_a = model.expected_goals(home, away)
+    p_under, p_over = model.prob_under_over(lam_h, lam_a, line=line)
+    return lam_h, lam_a, p_under, p_over
