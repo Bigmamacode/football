@@ -27,15 +27,19 @@ def history_to_rows(codes: Iterable[str], seasons: Iterable[int]) -> List[Dict]:
         for y in seasons:
             for m in competition_matches(code, y, status="FINISHED"):
                 ft = (m.get("score") or {}).get("fullTime", {})
+                h = (m.get("homeTeam") or {})
+                a = (m.get("awayTeam") or {})
                 rows.append({
                     "date": (m.get("utcDate") or "").split("T")[0],
                     "league": code,
-                    "home": (m.get("homeTeam") or {}).get("name",""),
-                    "away": (m.get("awayTeam") or {}).get("name",""),
+                    "home": h.get("name",""),
+                    "away": a.get("name",""),
+                    "home_id": h.get("id"),
+                    "away_id": a.get("id"),
                     "home_goals": int(ft.get("home") or 0),
                     "away_goals": int(ft.get("away") or 0),
                 })
-            time.sleep(0.4)  # rate limit friendly
+            time.sleep(0.4)
     return rows
 
 def upcoming_to_rows(codes: Iterable[str]) -> List[Dict]:
@@ -47,12 +51,21 @@ def upcoming_to_rows(codes: Iterable[str]) -> List[Dict]:
             comp = r.json()
             start = (comp.get("currentSeason") or {}).get("startDate") or f"{date.today().year}-01-01"
             year = int(str(start).split("-")[0])
-            for m in competition_matches(code, year, status="SCHEDULED"):
-                rows.append({
-                    "kickoff": m.get("utcDate",""),
-                    "league": code,
-                    "home": (m.get("homeTeam") or {}).get("name",""),
-                    "away": (m.get("awayTeam") or {}).get("name",""),
-                })
+            seen = set()
+            for st in ("SCHEDULED","TIMED"):
+                for m in competition_matches(code, year, status=st):
+                    h = (m.get("homeTeam") or {})
+                    a = (m.get("awayTeam") or {})
+                    key = (m.get("id") or m.get("utcDate"), h.get("id"), a.get("id"))
+                    if key in seen: continue
+                    seen.add(key)
+                    rows.append({
+                        "kickoff": m.get("utcDate",""),
+                        "league": code,
+                        "home": h.get("name",""),
+                        "away": a.get("name",""),
+                        "home_id": h.get("id"),
+                        "away_id": a.get("id"),
+                    })
             time.sleep(0.4)
     return rows
